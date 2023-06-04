@@ -12,12 +12,12 @@ from pydub import AudioSegment
 # input = "test_file_1.wav"
 # input = "500HzTone.wav"
 # input = "waning_note.wav"
-# input = "one_more_night.wav"
+input = "one_more_night.wav"
 # input = "1-5-1-sound.wav"
 # input = "Untitled2.wav"
 # input = "radio_brad.wav"
 # input = "stranger_long_track.wav"
-input = "sam_radio.m4a"
+# input = "sam_radio.m4a"
 output = "output.wav"
 
 def open(f_in, f_out):
@@ -169,7 +169,8 @@ def shiftSound(win, freq, transform, wout, frin):
         track[num] = f
         # if (f > 5000):
         #     plot(lf, win.getframerate())
-        vol[num] = sum(i for i in left)/len(left)
+        # vol[num] = sum(i for i in left)/len(left)
+        vol[num] = np.abs(lf[int(f / win.getframerate() * len(lf))] / 1000)
 
         # print(num)
     return track,vol
@@ -221,9 +222,9 @@ smoothedVol = smooth(avgVol,n)
 # plotNormal([avgVol])
 # print((0.25/time)*len(smoothedTrack))
 peaks = scipy.signal.find_peaks(np.multiply(avgTrack,-1),threshold=50,width=(0,(0.3/time)*len(avgTrack)))[0]
-plotNormal([avgTrack],time)
+plotNormal([avgTrack,avgVol],time)
 #0.25 seconds = (0.25/time)*len(smoothedTrack)
-plotNormal([smoothedTrack],time)
+plotNormal([smoothedTrack,avgVol],time)
 # plotNormal([smoothedVol],time)
 
 def getProcessedFrequency(fracThrough):
