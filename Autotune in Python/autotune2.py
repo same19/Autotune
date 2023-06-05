@@ -20,18 +20,27 @@ input = "one_more_night.wav"
 # input = "sam_radio.m4a"
 output = "output.wav"
 
-def open(f_in, f_out):
-    if input[-4:] == ".wav":
-        wr = wave.open("wav_input/"+input, 'r')
+def openSingleFile(f_in):
+    if f_in[-4:] == ".wav":
+        wr = wave.open("wav_input/"+f_in, 'r')
     else:
-        wrm4a = AudioSegment.from_file("m4a_input/"+input,  format= 'm4a')
-        file_handle = wrm4a.export("wav_input/"+input[:-4]+".wav", format='wav')
-        wr = wave.open("wav_input/"+input[:-4]+".wav",'r')
+        wrm4a = AudioSegment.from_file("m4a_input/"+f_in,  format= 'm4a')
+        file_handle = wrm4a.export("wav_input/"+f_in[:-4]+".wav", format='wav')
+        wr = wave.open("wav_input/"+f_in[:-4]+".wav",'r')
+    return wr
+
+def open(f_in, f_out):
+    if f_in[-4:] == ".wav":
+        wr = wave.open("wav_input/"+f_in, 'r')
+    else:
+        wrm4a = AudioSegment.from_file("m4a_input/"+f_in,  format= 'm4a')
+        file_handle = wrm4a.export("wav_input/"+f_in[:-4]+".wav", format='wav')
+        wr = wave.open("wav_input/"+f_in[:-4]+".wav",'r')
     # Set the parameters for the output file.
     par = list(wr.getparams())
     par[3] = 0  # The number of samples will be set by writeframes.
     par = tuple(par)
-    ww = wave.open("output/"+output, 'w')
+    ww = wave.open("output/"+f_out, 'w')
     ww.setparams(par)
     return wr,ww
 
@@ -60,6 +69,13 @@ def plotNormal(arr,scale=100):
         plt.plot(np.linspace(0,scale,len(i)),i)
     plt.show()
 
+def plotDict(arr):
+    plt.figure(figsize=(10,5))
+    plt.plot(arr.keys(), arr.values())
+    plt.xlabel("Frequency (Hz)")
+    plt.show()
+# def plotTuple(arr):
+
 
 def plot(plotArray, sr, size = 1, f_ratio = 1):
     plt.figure(figsize=(10,5))
@@ -72,8 +88,24 @@ def plot(plotArray, sr, size = 1, f_ratio = 1):
 def shift(input, ft, sr):
     return int(input * len(ft) / sr * 0.5)
 
+def frequencyRaw(ft,sr,low=20,high=1000):
+    peaks = scipy.signal.find_peaks(np.abs(ft),height=1*(10**6),distance = int(100.0 * len(ft) / sr+1))[0]
+    # print(int(200.0 * len(ft) / sr))
+    # print(peaks)
+    # plot(ft,sr,0.1)
+    # maxIndex = np.argmax(np.abs(ft))
+    if len(peaks)>0 and len(peaks < 20) and int(float(peaks[0])*sr/len(ft)) < 1500:
+        maxIndex = peaks[0]
+    else:
+        maxIndex = 0
+        return maxIndex,0
+    # for i in peaks:
+    #     if np.abs(ft)[i] > np.abs(ft)[maxIndex]:
+    #         maxIndex = i
+    return int(float(maxIndex)*sr/len(ft)),ft[maxIndex]
+
 def frequency(ft, sr, low=20, high=1000):
-    peaks = scipy.signal.find_peaks(np.abs(ft),height=1*(10**6),distance = int(100.0 * len(ft) / sr))[0]
+    peaks = scipy.signal.find_peaks(np.abs(ft),height=1*(10**6),distance = int(100.0 * len(ft) / sr+1))[0]
     # print(int(200.0 * len(ft) / sr))
     # print(peaks)
     # plot(ft,sr,0.1)
@@ -94,24 +126,64 @@ def frequency(ft, sr, low=20, high=1000):
     #     if i 
     # print(peaks)
 
-def getFrequencies(win, tps = 10):  #tones per second measured
-    da = np.frombuffer(win.readframes(win.getnframes()),dtype=np.int16)
-    left, right = da[0::2], da[1::2]  # left and right channel
-    maxTime = 0.5 #max seconds around the index to check
-    sz = int(win.getframerate()/tps) #frames per second / tones per second = frames per tone
-    c = int(win.getnframes()/sz) #frames / frames per tone = #tones
-    tones = []
-    for i in range(c):
-        baseIndex = c*sz
-        f = 0
-        for indexShift in range(20,int(maxTime * win.getframerate())):
-            avg = 0
-            lf, rf = np.fft.rfft(left[(baseIndex-indexShift):(baseIndex+indexShift+1)]), np.fft.rfft(right[(baseIndex-indexShift):(baseIndex+indexShift+1)])
-            l = frequency(lf,win.getframerate())
-            r = frequency(rf,win.getframerate())
-            f += float(l+r)/(2*(maxTime * win.getframerate()-20))
-        tones.append(f)
-    return tones
+def freqAtTime(win, da, time, frequencyRepeats = 50):
+    print(time)
+    centerFrame = int(time * win.getframerate()/2)
+    # centerFrame = time
+    # da = np.frombuffer(win.readframes(win.getnframes()),dtype = np.int16)
+    left,right = da[0::2],da[1::2]
+    a = centerFrame > len(left)
+    # print(str(len(left))+"   " + str(win.getnframes()))
+    maxFrameWidth = 10000
+    L = []
+    R = []
+    start = 1000
+    num = frequencyRepeats
+    for j in range(num):
+        i = int(j*(maxFrameWidth-start)/num + start)
+        # print(i)
+        if centerFrame-i >= 0 and centerFrame+i < len(left):
+            lf,rf = np.fft.rfft(left[centerFrame-i:centerFrame+i]),np.fft.rfft(right[centerFrame-i:centerFrame+i])
+            # peaks = scipy.signal.find_peaks(np.abs(lf))[0]
+            # dubfft = np.fft.rfft(peaks)
+            # print(peaks)
+            # plot(np.abs(lf),win.getframerate())
+            # plotNormal([dubfft],win.getframerate())
+            # LF, RF = frequency(lf,win.getframerate()), frequency(rf,win.getframerate())
+            # L.append((LF,np.abs(lf[int(LF * len(lf) / win.getframerate())])))
+            # R.append((RF,np.abs(rf[int(RF * len(rf) / win.getframerate())])))
+            LF,LFmag = frequencyRaw(lf,win.getframerate())
+            RF,RFmag = frequencyRaw(rf,win.getframerate())
+            L.append((LF,np.abs(LFmag)))
+            R.append((RF,np.abs(RFmag)))
+        # else:
+            # print("NOT IN IF")
+            # print(str(centerFrame + i) + " > " + str(len(left)))
+    # print(L)
+    if len(L) < 1:
+        return math.nan
+    # print("     " + str(np.argmax(L)))
+    # print(np.argmax(L))
+    # return np.argmax(L)
+    maxElem = L[0]
+    for i in L:
+        if i[1] > maxElem[1]:
+            maxElem = i
+    return maxElem[0]
+    # plotTuple(L)
+
+
+def getFrequencies(win, tps = 20, frequencyRepeats = 20):  #tps = tones per second measured
+    time = win.getnframes()/win.getframerate()
+    num = int(tps * time)
+    freq = []
+    win = openSingleFile(input)
+    da = np.frombuffer(win.readframes(win.getnframes()),dtype = np.int16)
+    for i in range(num):
+        timeInLoop = time * i/num
+        freq.append(freqAtTime(win, da, timeInLoop,frequencyRepeats))
+    return freq
+        
 
 
 def shiftSound(win, freq, transform, wout, frin):
@@ -139,8 +211,11 @@ def shiftSound(win, freq, transform, wout, frin):
             f = freq(num/float(c))
         else:
             f = freq(lf, win.getframerate())
+        if math.isnan(f):
+            print("nan!!!!")
+            f = 0
         r = 12.0
-        bias = 0.9
+        bias = 0.5
         if f == 0:
             current = 1
         else:
@@ -177,8 +252,8 @@ def shiftSound(win, freq, transform, wout, frin):
 
 tracks = []
 vols = []
-start = 10
-stop = 25
+start = 15
+stop = 15
 num = 10
 for j in range(num):
     i = (j/float(num)) * (stop-start) + start
@@ -222,13 +297,20 @@ smoothedVol = smooth(avgVol,n)
 # plotNormal([avgVol])
 # print((0.25/time)*len(smoothedTrack))
 peaks = scipy.signal.find_peaks(np.multiply(avgTrack,-1),threshold=50,width=(0,(0.3/time)*len(avgTrack)))[0]
-plotNormal([avgTrack,avgVol],time)
+# print(peaks[3])
+wr,ww = open(input,output)
+# freqAtTime(wr,peaks[0] / len(avgTrack) * time)
+# plotNormal(tracks,time)
+# plotNormal([avgTrack,avgVol],time)
 #0.25 seconds = (0.25/time)*len(smoothedTrack)
-plotNormal([smoothedTrack,avgVol],time)
+# plotNormal([smoothedTrack,avgVol],time)
 # plotNormal([smoothedVol],time)
+print("graphing")
+ACTUAL_FREQUENCIES = getFrequencies(wr)
+plotNormal([avgTrack,ACTUAL_FREQUENCIES],time)
 
 def getProcessedFrequency(fracThrough):
-    return smoothedTrack[int(fracThrough * len(smoothedTrack))]
+    return ACTUAL_FREQUENCIES[int(fracThrough * len(ACTUAL_FREQUENCIES))]
 wr,ww = open(input,output)
 shiftSound(wr, getProcessedFrequency,True,ww,5)
 wr.close()
