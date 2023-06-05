@@ -1,3 +1,20 @@
+# input = "test_file_1.wav"
+# input = "500HzTone.wav"
+# input = "waning_note.wav"
+# input = "one_more_night.wav"
+# input = "1-5-1-sound.wav"
+# input = "Untitled2.wav"
+# input = "radio_brad.wav"
+# input = "stranger_long_track.wav"
+input = "sam_radio.m4a"
+# input = "slidescale.m4a"
+
+mod = 12.0
+bias = 0
+editsPerSecond = 10
+
+output = "output.wav"
+
 import wave
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,17 +25,6 @@ import scipy
 from scipy import signal
 import math
 from pydub import AudioSegment
-
-# input = "test_file_1.wav"
-# input = "500HzTone.wav"
-# input = "waning_note.wav"
-input = "one_more_night.wav"
-# input = "1-5-1-sound.wav"
-# input = "Untitled2.wav"
-# input = "radio_brad.wav"
-# input = "stranger_long_track.wav"
-# input = "sam_radio.m4a"
-output = "output.wav"
 
 def openSingleFile(f_in):
     if f_in[-4:] == ".wav":
@@ -126,7 +132,7 @@ def frequency(ft, sr, low=20, high=1000):
     #     if i 
     # print(peaks)
 
-def freqAtTime(win, da, time, frequencyRepeats = 50):
+def freqAtTime(win, da, time, frequencyRepeats = 50,maxFrameWidth = 1500):
     print(time)
     centerFrame = int(time * win.getframerate()/2)
     # centerFrame = time
@@ -134,10 +140,10 @@ def freqAtTime(win, da, time, frequencyRepeats = 50):
     left,right = da[0::2],da[1::2]
     a = centerFrame > len(left)
     # print(str(len(left))+"   " + str(win.getnframes()))
-    maxFrameWidth = 10000
+    start = 500
+    # maxFrameWidth = 1500
     L = []
     R = []
-    start = 1000
     num = frequencyRepeats
     for j in range(num):
         i = int(j*(maxFrameWidth-start)/num + start)
@@ -166,14 +172,18 @@ def freqAtTime(win, da, time, frequencyRepeats = 50):
     # print(np.argmax(L))
     # return np.argmax(L)
     maxElem = L[0]
-    for i in L:
-        if i[1] > maxElem[1]:
-            maxElem = i
+    maxIndex = start
+    for i in range(len(L)):
+        width = int(i*(maxFrameWidth-start)/num + start)
+        power = 0
+        if L[i][1]/(width**power) > maxElem[1]/(maxIndex**power):
+            maxElem = L[i]
+            maxIndex = width
     return maxElem[0]
     # plotTuple(L)
 
 
-def getFrequencies(win, tps = 20, frequencyRepeats = 20):  #tps = tones per second measured
+def getFrequencies(win, tps = 20, frequencyRepeats = 50):  #tps = tones per second measured
     time = win.getnframes()/win.getframerate()
     num = int(tps * time)
     freq = []
@@ -181,7 +191,7 @@ def getFrequencies(win, tps = 20, frequencyRepeats = 20):  #tps = tones per seco
     da = np.frombuffer(win.readframes(win.getnframes()),dtype = np.int16)
     for i in range(num):
         timeInLoop = time * i/num
-        freq.append(freqAtTime(win, da, timeInLoop,frequencyRepeats))
+        freq.append(freqAtTime(win, da, timeInLoop,frequencyRepeats,1500))
     return freq
         
 
@@ -214,18 +224,16 @@ def shiftSound(win, freq, transform, wout, frin):
         if math.isnan(f):
             print("nan!!!!")
             f = 0
-        r = 12.0
-        bias = 0.5
         if f == 0:
             current = 1
         else:
-            current = (math.log2(f/440)*r + bias) % 1
+            current = (math.log2(f/440)*mod + bias) % 1
         # print(f * 2 ** ((1-current)/12))
         # print(current)
         if current > 0.5:
-            multiplier = 2 ** ((1-current)/r)
+            multiplier = 2 ** ((1-current)/mod)
         else:
-            multiplier = 2 ** (-current/r)
+            multiplier = 2 ** (-current/mod)
         # multiplier = 2 ** (0.5/12)
         if (f > 1000):
             multiplier = 1
@@ -312,6 +320,6 @@ plotNormal([avgTrack,ACTUAL_FREQUENCIES],time)
 def getProcessedFrequency(fracThrough):
     return ACTUAL_FREQUENCIES[int(fracThrough * len(ACTUAL_FREQUENCIES))]
 wr,ww = open(input,output)
-shiftSound(wr, getProcessedFrequency,True,ww,5)
+shiftSound(wr, getProcessedFrequency,True,ww,editsPerSecond)
 wr.close()
 ww.close()
